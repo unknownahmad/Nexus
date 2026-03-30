@@ -1,6 +1,6 @@
 import requests
 from sqlalchemy.orm import Session
-from db_models import Booking
+from app.repositories.models.user_orm import Booking
 from datetime import datetime
 
 # 1. Weather Check Logic
