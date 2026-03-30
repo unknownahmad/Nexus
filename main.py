@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.repositories.database import engine
 from app.repositories.models import user_orm
-from app.api.routers import user_router, weather_router
+from app.api.routers import user_router, weather_router, resource_router, booking_router
 
 user_orm.Base.metadata.create_all(bind=engine)
 
@@ -17,3 +17,5 @@ def read_root():
 
 app.include_router(weather_router.router, tags=["Weather"])
 app.include_router(user_router.router, prefix="/users", tags=["Users"])
+app.include_router(resource_router.router, tags=["Resources"])
+app.include_router(booking_router.router, prefix="/bookings", tags=["Bookings"])
