@@ -1,7 +1,6 @@
 import customtkinter as ctk
 import requests
 
-# Set the theme to match a professional tech tool
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -12,11 +11,9 @@ class NexusAdmin(ctk.CTk):
         self.title("Nexus Admin Control Center")
         self.geometry("1100x600")
 
-        # --- GRID LAYOUT ---
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # --- SIDEBAR ---
         self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         
@@ -32,25 +29,19 @@ class NexusAdmin(ctk.CTk):
         self.btn_users = ctk.CTkButton(self.sidebar_frame, text="User Management", command=self.show_users)
         self.btn_users.grid(row=3, column=0, padx=20, pady=10)
 
-        # --- MAIN CONTENT AREA ---
         self.main_view = ctk.CTkFrame(self, corner_radius=10)
         self.main_view.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         
         self.status_label = ctk.CTkLabel(self.main_view, text="Welcome back, Admin.", font=ctk.CTkFont(size=20))
         self.status_label.pack(pady=20)
 
-    # ==========================================
-    #             DASHBOARD TAB
-    # ==========================================
     def show_dashboard(self):
         for widget in self.main_view.winfo_children():
             widget.destroy()
 
-        # Create two columns for the dashboard
         self.main_view.grid_columnconfigure(0, weight=1)
         self.main_view.grid_columnconfigure(1, weight=1)
 
-        # --- LEFT COLUMN: WEATHER STATION ---
         weather_frame = ctk.CTkFrame(self.main_view, corner_radius=10)
         weather_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
         
@@ -60,7 +51,6 @@ class NexusAdmin(ctk.CTk):
         
         ctk.CTkButton(weather_frame, text="Update Weather", command=self.refresh_weather).pack(pady=10)
 
-        # --- RIGHT COLUMN: LIVE BOOKINGS ---
         booking_frame = ctk.CTkFrame(self.main_view, corner_radius=10)
         booking_frame.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         
@@ -70,7 +60,6 @@ class NexusAdmin(ctk.CTk):
         
         ctk.CTkButton(booking_frame, text="Refresh Feed", command=self.refresh_bookings).pack(pady=10)
 
-        # Initial Load
         self.refresh_weather()
         self.refresh_bookings()
 
@@ -95,13 +84,10 @@ class NexusAdmin(ctk.CTk):
                     anchor="w", justify="left"
                 )
                 b_lbl.pack(fill="x", padx=5, pady=5)
-                ctk.CTkFrame(self.booking_list, height=1, fg_color="gray").pack(fill="x") # Separator line
+                ctk.CTkFrame(self.booking_list, height=1, fg_color="gray").pack(fill="x")
         except Exception:
             ctk.CTkLabel(self.booking_list, text="No bookings found.").pack()
 
-    # ==========================================
-    #             RESOURCES TAB
-    # ==========================================
     def show_resources(self):
         for widget in self.main_view.winfo_children():
             widget.destroy()
@@ -137,10 +123,24 @@ class NexusAdmin(ctk.CTk):
                 desc_lbl = ctk.CTkLabel(item_frame, text=item['description'], text_color="gray")
                 desc_lbl.pack(side="left", padx=20)
                 
+                ctk.CTkButton(item_frame, text="Delete", width=60, fg_color="#922B21", 
+                              command=lambda i=item['id']: self.delete_resource(i)).pack(side="right", padx=10)
+                
                 ctk.CTkButton(item_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
 
         except Exception:
             ctk.CTkLabel(self.resource_list_frame, text="Error connecting to API. Is Uvicorn running?").pack(pady=20)
+
+    def delete_resource(self, resource_id):
+        url = f"http://127.0.0.1:8000/resources/{resource_id}"
+        try:
+            response = requests.delete(url)
+            if response.status_code == 200:
+                self.refresh_resources() 
+            else:
+                print(f"Failed to delete: {response.json().get('detail')}")
+        except Exception as e:
+            print(f"Error: {e}")
 
     def open_add_resource_window(self):
         self.add_win = ctk.CTkToplevel(self)
@@ -176,9 +176,6 @@ class NexusAdmin(ctk.CTk):
         except Exception:
             pass
 
-    # ==========================================
-    #             USERS TAB
-    # ==========================================
     def show_users(self):
         for widget in self.main_view.winfo_children():
             widget.destroy()
@@ -214,8 +211,24 @@ class NexusAdmin(ctk.CTk):
                 email_lbl = ctk.CTkLabel(user_frame, text=user['email'], text_color="gray")
                 email_lbl.pack(side="left", padx=20)
 
+                ctk.CTkButton(user_frame, text="Delete", width=60, fg_color="#922B21", 
+                              command=lambda u=user['id']: self.delete_user(u)).pack(side="right", padx=10)
+                
+                ctk.CTkButton(user_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+
         except Exception:
             ctk.CTkLabel(self.user_list_frame, text="Error connecting to API.").pack(pady=20)
+
+    def delete_user(self, user_id):
+        url = f"http://127.0.0.1:8000/users/{user_id}"
+        try:
+            response = requests.delete(url)
+            if response.status_code == 200:
+                self.refresh_users() 
+            else:
+                print(f"Failed to delete: {response.json().get('detail')}")
+        except Exception as e:
+            print(f"Error: {e}")
 
     def open_add_user_window(self):
         self.user_win = ctk.CTkToplevel(self)

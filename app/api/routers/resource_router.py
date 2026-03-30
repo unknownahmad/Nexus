@@ -34,3 +34,15 @@ def create_resource(name: str, description: str, category_id: int, db: Session =
 @router.get("/resources/")
 def list_resources(db: Session = Depends(get_db)):
     return db.query(user_orm.Resource).all()
+
+
+@router.delete("/resources/{resource_id}")
+def delete_resource(resource_id: int, db: Session = Depends(get_db)):
+    resource = db.query(user_orm.Resource).filter(user_orm.Resource.id == resource_id).first()
+    if not resource:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Resource not found")
+    
+    db.delete(resource)
+    db.commit()
+    return {"message": f"Resource {resource_id} deleted successfully"}
