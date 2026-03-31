@@ -9,6 +9,9 @@ load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_URL = "http://127.0.0.1:8000"
 
+API_KEY = "NexusSuperSecret2026"
+HEADERS = {"X-API-KEY": API_KEY}
+
 bot = telebot.TeleBot(TOKEN)
 user_sessions = {}
 
@@ -40,7 +43,7 @@ def send_welcome(message):
 def process_login(message):
     email = message.text.strip()
     try:
-        users = requests.get(f"{API_URL}/users/").json()
+        users = requests.get(f"{API_URL}/users/", headers=HEADERS, timeout=5).json()
         user = next((u for u in users if u['email'].lower() == email.lower()), None)
         
         if user:
@@ -50,7 +53,7 @@ def process_login(message):
         else:
             msg = bot.send_message(message.chat.id, "❌ Access Denied. Email not found. Try again or contact Admin.")
             bot.register_next_step_handler(msg, process_login)
-    except Exception:
+    except requests.exceptions.RequestException:
         bot.send_message(message.chat.id, "API Error. Make sure the server is running.")
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -70,17 +73,21 @@ def callback_query(call):
     elif call.data == "my_bookings":
         try:
             user_id = user_sessions[call.message.chat.id]
-            response = requests.get(f"{API_URL}/bookings/").json()
-            user_bookings = [b for b in response if b['user_id'] == user_id]
-            if not user_bookings:
-                text = "You have no active bookings."
+            response = requests.get(f"{API_URL}/bookings/", headers=HEADERS, timeout=5)
+            if response.status_code == 200:
+                all_bookings = response.json()
+                user_bookings = [b for b in all_bookings if b['user_id'] == user_id]
+                if not user_bookings:
+                    text = "You have no active bookings."
+                else:
+                    text = "📋 **Your Active Bookings:**\n\n"
+                    for b in user_bookings:
+                        text += f"🔹 Item ID: {b['resource_id']} | Starts: {b['start_time'][:16]}\n"
+                bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=main_menu(), parse_mode='Markdown')
             else:
-                text = "📋 **Your Active Bookings:**\n\n"
-                for b in user_bookings:
-                    text += f"🔹 Item ID: {b['resource_id']} | Starts: {b['start_time'][:16]}\n"
-            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=main_menu(), parse_mode='Markdown')
-        except Exception:
-            bot.send_message(call.message.chat.id, "❌ Error fetching bookings.")
+                bot.send_message(call.message.chat.id, "❌ Error fetching bookings (Auth Error).")
+        except requests.exceptions.RequestException:
+            bot.send_message(call.message.chat.id, "❌ Error fetching bookings (Connection Error).")
 
     elif call.data.startswith("cat_"):
         category_id = call.data.split("_")[1]
@@ -110,11 +117,16 @@ def callback_query(call):
         _, item_id, offset, slot = call.data.split("_")
         
         try:
-            weather = requests.get(f"{API_URL}/check-weather").json()
-            weather_msg = f"🌦 **Weather Check:** {weather['message']}\n"
-            warning = ""
-            if not weather['safe']:
-                warning = "⚠️ **WARNING:** It is raining. Outdoor gear booking might fail.\n\n"
+            weather_resp = requests.get(f"{API_URL}/weather/check-weather", headers=HEADERS, timeout=5)
+            if weather_resp.status_code == 200:
+                weather = weather_resp.json()
+                weather_msg = f"🌦 **Weather Check:** {weather['message']}\n"
+                warning = ""
+                if not weather.get('safe', True):
+                    warning = "⚠️ **WARNING:** It is raining. Outdoor gear booking might fail.\n\n"
+            else:
+                weather_msg = "🌦 **Weather Check:** Unavailable\n"
+                warning = ""
 
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("✅ Confirm Booking", callback_data=f"confirm_{item_id}_{offset}_{slot}"))
@@ -122,7 +134,7 @@ def callback_query(call):
             
             text = f"{warning}{weather_msg}\nYou are about to book Item #{item_id}. Proceed?"
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
-        except Exception:
+        except requests.exceptions.RequestException:
             bot.send_message(call.message.chat.id, "❌ Weather API Error.")
 
     elif call.data.startswith("confirm_"):
@@ -139,45 +151,51 @@ def callback_query(call):
 
         try:
             url = f"{API_URL}/bookings/?user_id={user_id}&resource_id={item_id}&start_time={start}&end_time={end}"
-            response = requests.post(url)
+            response = requests.post(url, headers=HEADERS, timeout=5)
 
             if response.status_code == 200:
                 bot.edit_message_text("✅ **Booking Confirmed!**\nYour gear is reserved. See you at the hub!", call.message.chat.id, call.message.message_id, reply_markup=main_menu(), parse_mode='Markdown')
             else:
                 error_msg = response.json().get('detail', 'Unknown Error')
                 bot.edit_message_text(f"❌ **Booking Failed:** {error_msg}", call.message.chat.id, call.message.message_id, reply_markup=main_menu())
-        except Exception:
+        except requests.exceptions.RequestException:
             bot.send_message(call.message.chat.id, "❌ API Error: Is the server running?")
 
 def show_categories(message):
     markup = InlineKeyboardMarkup()
     try:
-        cats = requests.get(f"{API_URL}/resources/categories/").json()
-        for c in cats:
-            markup.add(InlineKeyboardButton(c['name'], callback_data=f"cat_{c['id']}"))
-    except Exception:
+        response = requests.get(f"{API_URL}/resources/categories", headers=HEADERS, timeout=5)
+        if response.status_code == 200:
+            cats = response.json()
+            for c in cats:
+                markup.add(InlineKeyboardButton(c['name'], callback_data=f"cat_{c['id']}"))
+    except requests.exceptions.RequestException:
         pass
     markup.add(InlineKeyboardButton("⬅️ Back to Menu", callback_data="main_menu"))
     bot.edit_message_text("Select a Category:", message.chat.id, message.message_id, reply_markup=markup)
 
 def show_resources(message, category_id):
     try:
-        response = requests.get(f"{API_URL}/resources/").json()
-        filtered = [r for r in response if str(r['category_id']) == category_id]
+        response = requests.get(f"{API_URL}/resources/", headers=HEADERS, timeout=5)
+        if response.status_code == 200:
+            all_resources = response.json()
+            filtered = [r for r in all_resources if str(r['category_id']) == category_id]
 
-        markup = InlineKeyboardMarkup()
-        if not filtered:
+            markup = InlineKeyboardMarkup()
+            if not filtered:
+                markup.add(InlineKeyboardButton("⬅️ Back", callback_data="browse_categories"))
+                bot.edit_message_text("No items available.", message.chat.id, message.message_id, reply_markup=markup)
+                return
+
+            for item in filtered:
+                markup.add(InlineKeyboardButton(f"📦 {item['name']}", callback_data=f"item_{item['id']}"))
+
             markup.add(InlineKeyboardButton("⬅️ Back", callback_data="browse_categories"))
-            bot.edit_message_text("No items available.", message.chat.id, message.message_id, reply_markup=markup)
-            return
-
-        for item in filtered:
-            markup.add(InlineKeyboardButton(f"📦 {item['name']}", callback_data=f"item_{item['id']}"))
-
-        markup.add(InlineKeyboardButton("⬅️ Back", callback_data="browse_categories"))
-        bot.edit_message_text("Select an item to book:", message.chat.id, message.message_id, reply_markup=markup)
-    except Exception:
-        bot.send_message(message.chat.id, "❌ Error fetching resources.")
+            bot.edit_message_text("Select an item to book:", message.chat.id, message.message_id, reply_markup=markup)
+        else:
+            bot.send_message(message.chat.id, "❌ Auth Error fetching resources.")
+    except requests.exceptions.RequestException:
+        bot.send_message(message.chat.id, "❌ Connection Error fetching resources.")
 
 if __name__ == "__main__":
     bot.infinity_polling()

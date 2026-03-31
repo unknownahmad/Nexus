@@ -4,6 +4,10 @@ import requests
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+API_KEY = "NexusSuperSecret2026"
+HEADERS = {"X-API-KEY": API_KEY}
+BASE_URL = "http://127.0.0.1:8000"
+
 class NexusAdmin(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -65,28 +69,34 @@ class NexusAdmin(ctk.CTk):
 
     def refresh_weather(self):
         try:
-            response = requests.get("http://127.0.0.1:8000/check-weather")
-            data = response.json()
-            self.weather_info.configure(text=data["message"], text_color="white")
-        except Exception:
+            response = requests.get(f"{BASE_URL}/weather/check-weather", headers=HEADERS, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                self.weather_info.configure(text=data["message"], text_color="white")
+            else:
+                self.weather_info.configure(text=f"Error: {response.status_code}", text_color="red")
+        except requests.exceptions.RequestException:
             self.weather_info.configure(text="Weather API Offline", text_color="red")
 
     def refresh_bookings(self):
         for widget in self.booking_list.winfo_children():
             widget.destroy()
         try:
-            response = requests.get("http://127.0.0.1:8000/bookings/")
-            bookings = response.json()
-            for b in bookings:
-                b_lbl = ctk.CTkLabel(
-                    self.booking_list, 
-                    text=f"User {b['user_id']} ➔ Item {b['resource_id']}\nTime: {b['start_time'][:16]}", 
-                    anchor="w", justify="left"
-                )
-                b_lbl.pack(fill="x", padx=5, pady=5)
-                ctk.CTkFrame(self.booking_list, height=1, fg_color="gray").pack(fill="x")
-        except Exception:
-            ctk.CTkLabel(self.booking_list, text="No bookings found.").pack()
+            response = requests.get(f"{BASE_URL}/bookings/", headers=HEADERS, timeout=5)
+            if response.status_code == 200:
+                bookings = response.json()
+                for b in bookings:
+                    b_lbl = ctk.CTkLabel(
+                        self.booking_list, 
+                        text=f"User {b['user_id']} ➔ Item {b['resource_id']}\nTime: {b['start_time'][:16]}", 
+                        anchor="w", justify="left"
+                    )
+                    b_lbl.pack(fill="x", padx=5, pady=5)
+                    ctk.CTkFrame(self.booking_list, height=1, fg_color="gray").pack(fill="x")
+            else:
+                ctk.CTkLabel(self.booking_list, text="Failed to fetch bookings.", text_color="red").pack()
+        except requests.exceptions.RequestException:
+            ctk.CTkLabel(self.booking_list, text="API Offline.").pack()
 
     def show_resources(self):
         for widget in self.main_view.winfo_children():
@@ -110,37 +120,40 @@ class NexusAdmin(ctk.CTk):
             widget.destroy()
 
         try:
-            response = requests.get("http://127.0.0.1:8000/resources/")
-            resources = response.json()
+            response = requests.get(f"{BASE_URL}/resources/", headers=HEADERS, timeout=5)
+            if response.status_code == 200:
+                resources = response.json()
 
-            for item in resources:
-                item_frame = ctk.CTkFrame(self.resource_list_frame)
-                item_frame.pack(fill="x", padx=10, pady=5)
-                
-                name_lbl = ctk.CTkLabel(item_frame, text=f"ID: {item['id']} | {item['name']}", font=ctk.CTkFont(weight="bold"))
-                name_lbl.pack(side="left", padx=10)
-                
-                desc_lbl = ctk.CTkLabel(item_frame, text=item['description'], text_color="gray")
-                desc_lbl.pack(side="left", padx=20)
-                
-                ctk.CTkButton(item_frame, text="Delete", width=60, fg_color="#922B21", 
-                              command=lambda i=item['id']: self.delete_resource(i)).pack(side="right", padx=10)
-                
-                ctk.CTkButton(item_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+                for item in resources:
+                    item_frame = ctk.CTkFrame(self.resource_list_frame)
+                    item_frame.pack(fill="x", padx=10, pady=5)
+                    
+                    name_lbl = ctk.CTkLabel(item_frame, text=f"ID: {item['id']} | {item['name']}", font=ctk.CTkFont(weight="bold"))
+                    name_lbl.pack(side="left", padx=10)
+                    
+                    desc_lbl = ctk.CTkLabel(item_frame, text=item['description'], text_color="gray")
+                    desc_lbl.pack(side="left", padx=20)
+                    
+                    ctk.CTkButton(item_frame, text="Delete", width=60, fg_color="#922B21", 
+                                  command=lambda i=item['id']: self.delete_resource(i)).pack(side="right", padx=10)
+                    
+                    ctk.CTkButton(item_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+            else:
+                ctk.CTkLabel(self.resource_list_frame, text=f"Auth Error: {response.status_code}").pack(pady=20)
 
-        except Exception:
+        except requests.exceptions.RequestException:
             ctk.CTkLabel(self.resource_list_frame, text="Error connecting to API. Is Uvicorn running?").pack(pady=20)
 
     def delete_resource(self, resource_id):
-        url = f"http://127.0.0.1:8000/resources/{resource_id}"
+        url = f"{BASE_URL}/resources/{resource_id}"
         try:
-            response = requests.delete(url)
+            response = requests.delete(url, headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 self.refresh_resources() 
             else:
-                print(f"Failed to delete: {response.json().get('detail')}")
-        except Exception as e:
-            print(f"Error: {e}")
+                print(f"Failed to delete: {response.status_code} - {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
 
     def open_add_resource_window(self):
         self.add_win = ctk.CTkToplevel(self)
@@ -163,18 +176,21 @@ class NexusAdmin(ctk.CTk):
         ctk.CTkButton(self.add_win, text="Save to Nexus", command=self.save_new_resource).pack(pady=20)
 
     def save_new_resource(self):
+        
         name = self.entry_name.get()
         desc = self.entry_desc.get()
         cat_id = self.entry_cat.get()
 
-        url = f"http://127.0.0.1:8000/resources/?name={name}&description={desc}&category_id={cat_id}"
+        url = f"{BASE_URL}/resources/?name={name}&description={desc}&category_id={cat_id}"
         try:
-            response = requests.post(url)
+            response = requests.post(url, headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 self.add_win.destroy()
                 self.refresh_resources()
-        except Exception:
-            pass
+            else:
+                 print(f"Failed to save: {response.text}")
+        except requests.exceptions.RequestException as e:
+             print(f"Connection Error: {e}")
 
     def show_users(self):
         for widget in self.main_view.winfo_children():
@@ -198,37 +214,40 @@ class NexusAdmin(ctk.CTk):
             widget.destroy()
 
         try:
-            response = requests.get("http://127.0.0.1:8000/users/")
-            users = response.json()
+            response = requests.get(f"{BASE_URL}/users/", headers=HEADERS, timeout=5)
+            if response.status_code == 200:
+                users = response.json()
 
-            for user in users:
-                user_frame = ctk.CTkFrame(self.user_list_frame)
-                user_frame.pack(fill="x", padx=10, pady=5)
-                
-                info_lbl = ctk.CTkLabel(user_frame, text=f"ID: {user['id']} | {user['name']} ({user['role']})", font=ctk.CTkFont(weight="bold"))
-                info_lbl.pack(side="left", padx=10)
-                
-                email_lbl = ctk.CTkLabel(user_frame, text=user['email'], text_color="gray")
-                email_lbl.pack(side="left", padx=20)
+                for user in users:
+                    user_frame = ctk.CTkFrame(self.user_list_frame)
+                    user_frame.pack(fill="x", padx=10, pady=5)
+                    
+                    info_lbl = ctk.CTkLabel(user_frame, text=f"ID: {user['id']} | {user['name']} ({user['role']})", font=ctk.CTkFont(weight="bold"))
+                    info_lbl.pack(side="left", padx=10)
+                    
+                    email_lbl = ctk.CTkLabel(user_frame, text=user['email'], text_color="gray")
+                    email_lbl.pack(side="left", padx=20)
 
-                ctk.CTkButton(user_frame, text="Delete", width=60, fg_color="#922B21", 
-                              command=lambda u=user['id']: self.delete_user(u)).pack(side="right", padx=10)
-                
-                ctk.CTkButton(user_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+                    ctk.CTkButton(user_frame, text="Delete", width=60, fg_color="#922B21", 
+                                  command=lambda u=user['id']: self.delete_user(u)).pack(side="right", padx=10)
+                    
+                    ctk.CTkButton(user_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+            else:
+                ctk.CTkLabel(self.user_list_frame, text=f"Auth Error: {response.status_code}").pack(pady=20)
 
-        except Exception:
+        except requests.exceptions.RequestException:
             ctk.CTkLabel(self.user_list_frame, text="Error connecting to API.").pack(pady=20)
 
     def delete_user(self, user_id):
-        url = f"http://127.0.0.1:8000/users/{user_id}"
+        url = f"{BASE_URL}/users/{user_id}"
         try:
-            response = requests.delete(url)
+            response = requests.delete(url, headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 self.refresh_users() 
             else:
-                print(f"Failed to delete: {response.json().get('detail')}")
-        except Exception as e:
-            print(f"Error: {e}")
+                print(f"Failed to delete: {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
 
     def open_add_user_window(self):
         self.user_win = ctk.CTkToplevel(self)
@@ -251,18 +270,22 @@ class NexusAdmin(ctk.CTk):
         ctk.CTkButton(self.user_win, text="Create User", command=self.save_new_user).pack(pady=20)
 
     def save_new_user(self):
+
         name = self.u_name.get()
         email = self.u_email.get()
         role = self.u_role.get()
 
-        url = f"http://127.0.0.1:8000/users/?name={name}&email={email}&role={role}"
+        url = f"{BASE_URL}/users/?name={name}&email={email}&role={role}"
         try:
-            response = requests.post(url)
+            response = requests.post(url, headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 self.user_win.destroy()
                 self.refresh_users()
-        except Exception:
-            pass
+            else:
+                print(f"Failed to save: {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+
 
 if __name__ == "__main__":
     app = NexusAdmin()
