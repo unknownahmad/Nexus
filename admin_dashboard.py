@@ -1,5 +1,7 @@
 import customtkinter as ctk
 import requests
+import threading
+from tkinter import messagebox
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -49,7 +51,6 @@ class NexusAdmin(ctk.CTk):
         self.main_view.grid_columnconfigure(0, weight=1)
         self.main_view.grid_columnconfigure(1, weight=1)
 
-        # Weather Widget
         weather_frame = ctk.CTkFrame(self.main_view, corner_radius=10)
         weather_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
         
@@ -59,7 +60,6 @@ class NexusAdmin(ctk.CTk):
         
         ctk.CTkButton(weather_frame, text="Update Weather", command=self.refresh_weather).pack(pady=10)
 
-        # Bookings Widget
         booking_frame = ctk.CTkFrame(self.main_view, corner_radius=10)
         booking_frame.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         
@@ -87,13 +87,11 @@ class NexusAdmin(ctk.CTk):
         for widget in self.booking_list.winfo_children():
             widget.destroy()
         try:
-            response = requests.get(f"{BASE_URL}/bookings/", headers=HEADERS, timeout=5)
+            response = requests.get(f"{BASE_URL}/bookings", headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 bookings = response.json()
                 for b in bookings:
-                    # Now using resource_name from the updated backend API
                     display_text = f"User {b['user_id']} ➔ {b.get('resource_name', 'Unknown Item')}\nTime: {b['start_time'][:16]}"
-                    
                     b_lbl = ctk.CTkLabel(
                         self.booking_list, 
                         text=display_text, 
@@ -131,7 +129,7 @@ class NexusAdmin(ctk.CTk):
             widget.destroy()
 
         try:
-            response = requests.get(f"{BASE_URL}/resources/", headers=HEADERS, timeout=5)
+            response = requests.get(f"{BASE_URL}/resources", headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 resources = response.json()
 
@@ -154,16 +152,22 @@ class NexusAdmin(ctk.CTk):
                 ctk.CTkLabel(self.resource_list_frame, text=f"Auth Error: {response.status_code}").pack(pady=20)
 
         except requests.exceptions.RequestException:
-            ctk.CTkLabel(self.resource_list_frame, text="Error connecting to API. Is Uvicorn running?").pack(pady=20)
+            ctk.CTkLabel(self.resource_list_frame, text="Error connecting to API.").pack(pady=20)
 
     def delete_resource(self, resource_id):
-        url = f"{BASE_URL}/resources/{resource_id}"
-        try:
-            response = requests.delete(url, headers=HEADERS, timeout=5)
-            if response.status_code == 200:
-                self.refresh_resources() 
-        except requests.exceptions.RequestException as e:
-            print(f"Connection Error: {e}")
+        def task():
+            url = f"{BASE_URL}/resources/{resource_id}"
+            try:
+                response = requests.delete(url, headers=HEADERS, timeout=5)
+                if response.status_code == 200:
+                    self.after(0, self.refresh_resources)
+                    self.after(0, lambda: messagebox.showinfo("Success", "Resource deleted!"))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", f"Failed: {response.text}"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
 
     def open_add_resource_window(self):
         self.add_win = ctk.CTkToplevel(self)
@@ -186,19 +190,25 @@ class NexusAdmin(ctk.CTk):
         ctk.CTkButton(self.add_win, text="Save to Nexus", command=self.save_new_resource).pack(pady=20)
 
     def save_new_resource(self):
-        url = f"{BASE_URL}/resources/"
         payload = {
             "name": self.entry_name.get(),
             "description": self.entry_desc.get(),
             "category_id": int(self.entry_cat.get())
         }
-        try:
-            response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
-            if response.status_code == 200:
-                self.add_win.destroy()
-                self.refresh_resources()
-        except requests.exceptions.RequestException:
-            pass
+        def task():
+            url = f"{BASE_URL}/resources/"
+            try:
+                response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
+                if response.status_code == 200:
+                    self.after(0, self.add_win.destroy)
+                    self.after(0, self.refresh_resources)
+                    self.after(0, lambda: messagebox.showinfo("Success", "Resource Added!"))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", response.text))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
 
     def open_edit_resource_window(self, item):
         self.edit_res_win = ctk.CTkToplevel(self)
@@ -224,19 +234,25 @@ class NexusAdmin(ctk.CTk):
         ctk.CTkButton(self.edit_res_win, text="Update Resource", command=lambda: self.save_edit_resource(item['id'])).pack(pady=20)
 
     def save_edit_resource(self, resource_id):
-        url = f"{BASE_URL}/resources/{resource_id}"
         payload = {
             "name": self.edit_r_name.get(),
             "description": self.edit_r_desc.get(),
             "category_id": int(self.edit_r_cat.get())
         }
-        try:
-            response = requests.put(url, headers=HEADERS, json=payload, timeout=5)
-            if response.status_code == 200:
-                self.edit_res_win.destroy()
-                self.refresh_resources()
-        except requests.exceptions.RequestException:
-            pass
+        def task():
+            url = f"{BASE_URL}/resources/{resource_id}"
+            try:
+                response = requests.put(url, headers=HEADERS, json=payload, timeout=5)
+                if response.status_code == 200:
+                    self.after(0, self.edit_res_win.destroy)
+                    self.after(0, self.refresh_resources)
+                    self.after(0, lambda: messagebox.showinfo("Success", "Resource Updated!"))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", response.text))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
 
     # ---------------------------------------------------------
     # USERS TAB
@@ -263,7 +279,7 @@ class NexusAdmin(ctk.CTk):
             widget.destroy()
 
         try:
-            response = requests.get(f"{BASE_URL}/users/", headers=HEADERS, timeout=5)
+            response = requests.get(f"{BASE_URL}/users", headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 users = response.json()
 
@@ -289,13 +305,19 @@ class NexusAdmin(ctk.CTk):
             ctk.CTkLabel(self.user_list_frame, text="Error connecting to API.").pack(pady=20)
 
     def delete_user(self, user_id):
-        url = f"{BASE_URL}/users/{user_id}"
-        try:
-            response = requests.delete(url, headers=HEADERS, timeout=5)
-            if response.status_code == 200:
-                self.refresh_users() 
-        except requests.exceptions.RequestException as e:
-            print(f"Connection Error: {e}")
+        def task():
+            url = f"{BASE_URL}/users/{user_id}"
+            try:
+                response = requests.delete(url, headers=HEADERS, timeout=5)
+                if response.status_code == 200:
+                    self.after(0, self.refresh_users) 
+                    self.after(0, lambda: messagebox.showinfo("Success", "User deleted!"))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", f"Failed: {response.text}"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
 
     def open_add_user_window(self):
         self.user_win = ctk.CTkToplevel(self)
@@ -318,19 +340,25 @@ class NexusAdmin(ctk.CTk):
         ctk.CTkButton(self.user_win, text="Create User", command=self.save_new_user).pack(pady=20)
 
     def save_new_user(self):
-        url = f"{BASE_URL}/users/"
         payload = {
             "name": self.u_name.get(),
             "email": self.u_email.get(),
             "role": self.u_role.get()
         }
-        try:
-            response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
-            if response.status_code == 200:
-                self.user_win.destroy()
-                self.refresh_users()
-        except requests.exceptions.RequestException:
-            pass
+        def task():
+            url = f"{BASE_URL}/users/"
+            try:
+                response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
+                if response.status_code == 200:
+                    self.after(0, self.user_win.destroy)
+                    self.after(0, self.refresh_users)
+                    self.after(0, lambda: messagebox.showinfo("Success", "User Created!"))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", response.text))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
 
     def open_edit_user_window(self, user):
         self.edit_user_win = ctk.CTkToplevel(self)
@@ -356,19 +384,25 @@ class NexusAdmin(ctk.CTk):
         ctk.CTkButton(self.edit_user_win, text="Update User", command=lambda: self.save_edit_user(user['id'])).pack(pady=20)
 
     def save_edit_user(self, user_id):
-        url = f"{BASE_URL}/users/{user_id}"
         payload = {
             "name": self.edit_u_name.get(),
             "email": self.edit_u_email.get(),
             "role": self.edit_u_role.get()
         }
-        try:
-            response = requests.put(url, headers=HEADERS, json=payload, timeout=5)
-            if response.status_code == 200:
-                self.edit_user_win.destroy()
-                self.refresh_users()
-        except requests.exceptions.RequestException:
-            pass
+        def task():
+            url = f"{BASE_URL}/users/{user_id}"
+            try:
+                response = requests.put(url, headers=HEADERS, json=payload, timeout=5)
+                if response.status_code == 200:
+                    self.after(0, self.edit_user_win.destroy)
+                    self.after(0, self.refresh_users)
+                    self.after(0, lambda: messagebox.showinfo("Success", "User Updated!"))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", response.text))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
 
 
 if __name__ == "__main__":
