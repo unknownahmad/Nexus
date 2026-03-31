@@ -17,7 +17,7 @@ def read_root():
 
 app.include_router(weather_router.router, tags=["Weather"])
 app.include_router(user_router.router, prefix="/users", tags=["Users"])
-app.include_router(resource_router.router, tags=["Resources"])
+app.include_router(resource_router.router, prefix="/resources", tags=["Resources"])
 app.include_router(booking_router.router, prefix="/bookings", tags=["Bookings"])
 app.include_router(review_router.router, prefix="/reviews", tags=["Reviews"])
 app.include_router(maintenance_router.router, prefix="/maintenance", tags=["Maintenance"])
