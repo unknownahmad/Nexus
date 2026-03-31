@@ -39,6 +39,9 @@ class NexusAdmin(ctk.CTk):
         self.status_label = ctk.CTkLabel(self.main_view, text="Welcome back, Admin.", font=ctk.CTkFont(size=20))
         self.status_label.pack(pady=20)
 
+    # ---------------------------------------------------------
+    # DASHBOARD TAB
+    # ---------------------------------------------------------
     def show_dashboard(self):
         for widget in self.main_view.winfo_children():
             widget.destroy()
@@ -46,6 +49,7 @@ class NexusAdmin(ctk.CTk):
         self.main_view.grid_columnconfigure(0, weight=1)
         self.main_view.grid_columnconfigure(1, weight=1)
 
+        # Weather Widget
         weather_frame = ctk.CTkFrame(self.main_view, corner_radius=10)
         weather_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
         
@@ -55,6 +59,7 @@ class NexusAdmin(ctk.CTk):
         
         ctk.CTkButton(weather_frame, text="Update Weather", command=self.refresh_weather).pack(pady=10)
 
+        # Bookings Widget
         booking_frame = ctk.CTkFrame(self.main_view, corner_radius=10)
         booking_frame.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         
@@ -86,9 +91,12 @@ class NexusAdmin(ctk.CTk):
             if response.status_code == 200:
                 bookings = response.json()
                 for b in bookings:
+                    # Now using resource_name from the updated backend API
+                    display_text = f"User {b['user_id']} ➔ {b.get('resource_name', 'Unknown Item')}\nTime: {b['start_time'][:16]}"
+                    
                     b_lbl = ctk.CTkLabel(
                         self.booking_list, 
-                        text=f"User {b['user_id']} ➔ Item {b['resource_id']}\nTime: {b['start_time'][:16]}", 
+                        text=display_text, 
                         anchor="w", justify="left"
                     )
                     b_lbl.pack(fill="x", padx=5, pady=5)
@@ -98,6 +106,9 @@ class NexusAdmin(ctk.CTk):
         except requests.exceptions.RequestException:
             ctk.CTkLabel(self.booking_list, text="API Offline.").pack()
 
+    # ---------------------------------------------------------
+    # RESOURCES TAB
+    # ---------------------------------------------------------
     def show_resources(self):
         for widget in self.main_view.winfo_children():
             widget.destroy()
@@ -137,7 +148,8 @@ class NexusAdmin(ctk.CTk):
                     ctk.CTkButton(item_frame, text="Delete", width=60, fg_color="#922B21", 
                                   command=lambda i=item['id']: self.delete_resource(i)).pack(side="right", padx=10)
                     
-                    ctk.CTkButton(item_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+                    ctk.CTkButton(item_frame, text="Edit", width=60, fg_color="darkblue",
+                                  command=lambda i=item: self.open_edit_resource_window(i)).pack(side="right", padx=10)
             else:
                 ctk.CTkLabel(self.resource_list_frame, text=f"Auth Error: {response.status_code}").pack(pady=20)
 
@@ -150,14 +162,12 @@ class NexusAdmin(ctk.CTk):
             response = requests.delete(url, headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 self.refresh_resources() 
-            else:
-                print(f"Failed to delete: {response.status_code} - {response.text}")
         except requests.exceptions.RequestException as e:
             print(f"Connection Error: {e}")
 
     def open_add_resource_window(self):
         self.add_win = ctk.CTkToplevel(self)
-        self.add_win.title("Add New Resource/Studio")
+        self.add_win.title("Add New Resource")
         self.add_win.geometry("400x400")
         self.add_win.attributes("-topmost", True)
 
@@ -169,29 +179,68 @@ class NexusAdmin(ctk.CTk):
         self.entry_desc = ctk.CTkEntry(self.add_win, width=250)
         self.entry_desc.pack(pady=5)
 
-        ctk.CTkLabel(self.add_win, text="Category ID (1=Photo, 2=Studio):").pack(pady=(10, 0))
+        ctk.CTkLabel(self.add_win, text="Category ID:").pack(pady=(10, 0))
         self.entry_cat = ctk.CTkEntry(self.add_win, width=250)
         self.entry_cat.pack(pady=5)
 
         ctk.CTkButton(self.add_win, text="Save to Nexus", command=self.save_new_resource).pack(pady=20)
 
     def save_new_resource(self):
-        
-        name = self.entry_name.get()
-        desc = self.entry_desc.get()
-        cat_id = self.entry_cat.get()
-
-        url = f"{BASE_URL}/resources/?name={name}&description={desc}&category_id={cat_id}"
+        url = f"{BASE_URL}/resources/"
+        payload = {
+            "name": self.entry_name.get(),
+            "description": self.entry_desc.get(),
+            "category_id": int(self.entry_cat.get())
+        }
         try:
-            response = requests.post(url, headers=HEADERS, timeout=5)
+            response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
             if response.status_code == 200:
                 self.add_win.destroy()
                 self.refresh_resources()
-            else:
-                 print(f"Failed to save: {response.text}")
-        except requests.exceptions.RequestException as e:
-             print(f"Connection Error: {e}")
+        except requests.exceptions.RequestException:
+            pass
 
+    def open_edit_resource_window(self, item):
+        self.edit_res_win = ctk.CTkToplevel(self)
+        self.edit_res_win.title("Edit Resource")
+        self.edit_res_win.geometry("400x400")
+        self.edit_res_win.attributes("-topmost", True)
+
+        ctk.CTkLabel(self.edit_res_win, text="Resource Name:").pack(pady=(20, 0))
+        self.edit_r_name = ctk.CTkEntry(self.edit_res_win, width=250)
+        self.edit_r_name.insert(0, item['name'])
+        self.edit_r_name.pack(pady=5)
+
+        ctk.CTkLabel(self.edit_res_win, text="Description:").pack(pady=(10, 0))
+        self.edit_r_desc = ctk.CTkEntry(self.edit_res_win, width=250)
+        self.edit_r_desc.insert(0, item['description'])
+        self.edit_r_desc.pack(pady=5)
+
+        ctk.CTkLabel(self.edit_res_win, text="Category ID:").pack(pady=(10, 0))
+        self.edit_r_cat = ctk.CTkEntry(self.edit_res_win, width=250)
+        self.edit_r_cat.insert(0, str(item['category_id']))
+        self.edit_r_cat.pack(pady=5)
+
+        ctk.CTkButton(self.edit_res_win, text="Update Resource", command=lambda: self.save_edit_resource(item['id'])).pack(pady=20)
+
+    def save_edit_resource(self, resource_id):
+        url = f"{BASE_URL}/resources/{resource_id}"
+        payload = {
+            "name": self.edit_r_name.get(),
+            "description": self.edit_r_desc.get(),
+            "category_id": int(self.edit_r_cat.get())
+        }
+        try:
+            response = requests.put(url, headers=HEADERS, json=payload, timeout=5)
+            if response.status_code == 200:
+                self.edit_res_win.destroy()
+                self.refresh_resources()
+        except requests.exceptions.RequestException:
+            pass
+
+    # ---------------------------------------------------------
+    # USERS TAB
+    # ---------------------------------------------------------
     def show_users(self):
         for widget in self.main_view.winfo_children():
             widget.destroy()
@@ -231,7 +280,8 @@ class NexusAdmin(ctk.CTk):
                     ctk.CTkButton(user_frame, text="Delete", width=60, fg_color="#922B21", 
                                   command=lambda u=user['id']: self.delete_user(u)).pack(side="right", padx=10)
                     
-                    ctk.CTkButton(user_frame, text="Edit", width=60, fg_color="darkblue").pack(side="right", padx=10)
+                    ctk.CTkButton(user_frame, text="Edit", width=60, fg_color="darkblue",
+                                  command=lambda u=user: self.open_edit_user_window(u)).pack(side="right", padx=10)
             else:
                 ctk.CTkLabel(self.user_list_frame, text=f"Auth Error: {response.status_code}").pack(pady=20)
 
@@ -244,8 +294,6 @@ class NexusAdmin(ctk.CTk):
             response = requests.delete(url, headers=HEADERS, timeout=5)
             if response.status_code == 200:
                 self.refresh_users() 
-            else:
-                print(f"Failed to delete: {response.text}")
         except requests.exceptions.RequestException as e:
             print(f"Connection Error: {e}")
 
@@ -263,28 +311,64 @@ class NexusAdmin(ctk.CTk):
         self.u_email = ctk.CTkEntry(self.user_win, width=250)
         self.u_email.pack(pady=5)
 
-        ctk.CTkLabel(self.user_win, text="Role (Student/Admin):").pack(pady=(10, 0))
+        ctk.CTkLabel(self.user_win, text="Role:").pack(pady=(10, 0))
         self.u_role = ctk.CTkEntry(self.user_win, width=250)
         self.u_role.pack(pady=5)
 
         ctk.CTkButton(self.user_win, text="Create User", command=self.save_new_user).pack(pady=20)
 
     def save_new_user(self):
-
-        name = self.u_name.get()
-        email = self.u_email.get()
-        role = self.u_role.get()
-
-        url = f"{BASE_URL}/users/?name={name}&email={email}&role={role}"
+        url = f"{BASE_URL}/users/"
+        payload = {
+            "name": self.u_name.get(),
+            "email": self.u_email.get(),
+            "role": self.u_role.get()
+        }
         try:
-            response = requests.post(url, headers=HEADERS, timeout=5)
+            response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
             if response.status_code == 200:
                 self.user_win.destroy()
                 self.refresh_users()
-            else:
-                print(f"Failed to save: {response.text}")
-        except requests.exceptions.RequestException as e:
-            print(f"Connection Error: {e}")
+        except requests.exceptions.RequestException:
+            pass
+
+    def open_edit_user_window(self, user):
+        self.edit_user_win = ctk.CTkToplevel(self)
+        self.edit_user_win.title("Edit User")
+        self.edit_user_win.geometry("400x400")
+        self.edit_user_win.attributes("-topmost", True)
+
+        ctk.CTkLabel(self.edit_user_win, text="Full Name:").pack(pady=(20, 0))
+        self.edit_u_name = ctk.CTkEntry(self.edit_user_win, width=250)
+        self.edit_u_name.insert(0, user['name'])
+        self.edit_u_name.pack(pady=5)
+
+        ctk.CTkLabel(self.edit_user_win, text="Email:").pack(pady=(10, 0))
+        self.edit_u_email = ctk.CTkEntry(self.edit_user_win, width=250)
+        self.edit_u_email.insert(0, user['email'])
+        self.edit_u_email.pack(pady=5)
+
+        ctk.CTkLabel(self.edit_user_win, text="Role:").pack(pady=(10, 0))
+        self.edit_u_role = ctk.CTkEntry(self.edit_user_win, width=250)
+        self.edit_u_role.insert(0, user['role'])
+        self.edit_u_role.pack(pady=5)
+
+        ctk.CTkButton(self.edit_user_win, text="Update User", command=lambda: self.save_edit_user(user['id'])).pack(pady=20)
+
+    def save_edit_user(self, user_id):
+        url = f"{BASE_URL}/users/{user_id}"
+        payload = {
+            "name": self.edit_u_name.get(),
+            "email": self.edit_u_email.get(),
+            "role": self.edit_u_role.get()
+        }
+        try:
+            response = requests.put(url, headers=HEADERS, json=payload, timeout=5)
+            if response.status_code == 200:
+                self.edit_user_win.destroy()
+                self.refresh_users()
+        except requests.exceptions.RequestException:
+            pass
 
 
 if __name__ == "__main__":

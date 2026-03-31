@@ -47,3 +47,25 @@ def delete_resource(resource_id: int, db: Session = Depends(get_db)):
     db.delete(resource)
     db.commit()
     return {"message": f"Resource {resource_id} deleted successfully"}
+
+@router.put("/{resource_id}")
+def update_resource(resource_id: int, res_data: ResourceCreate, db: Session = Depends(get_db)):
+    resource = db.query(user_orm.Resource).filter(user_orm.Resource.id == resource_id).first()
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    
+    resource.name = res_data.name
+    resource.description = res_data.description
+    resource.category_id = res_data.category_id
+    db.commit()
+    db.refresh(resource)
+    return resource
+
+@router.delete("/categories/{category_id}")
+def delete_category(category_id: int, db: Session = Depends(get_db)):
+    category = db.query(user_orm.Category).filter(user_orm.Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    db.delete(category)
+    db.commit()
+    return {"message": f"Category {category_id} deleted successfully"}

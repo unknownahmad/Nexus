@@ -1,4 +1,5 @@
 import os
+import json
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
@@ -13,7 +14,20 @@ API_KEY = "NexusSuperSecret2026"
 HEADERS = {"X-API-KEY": API_KEY}
 
 bot = telebot.TeleBot(TOKEN)
-user_sessions = {}
+
+SESSION_FILE = "bot_sessions.json"
+
+def load_sessions():
+    if os.path.exists(SESSION_FILE):
+        with open(SESSION_FILE, "r") as f:
+            return {int(k): v for k, v in json.load(f).items()}
+    return {}
+
+def save_sessions():
+    with open(SESSION_FILE, "w") as f:
+        json.dump(user_sessions, f)
+
+user_sessions = load_sessions()
 
 def main_menu():
     markup = InlineKeyboardMarkup()
@@ -48,6 +62,7 @@ def process_login(message):
         
         if user:
             user_sessions[message.chat.id] = user['id']
+            save_sessions()
             bot.send_message(message.chat.id, f"✅ Verified! Welcome back, {user['name']}.")
             show_main_menu(message.chat.id)
         else:
@@ -150,8 +165,14 @@ def callback_query(call):
             end = target_date.strftime("%Y-%m-%dT18:00:00")
 
         try:
-            url = f"{API_URL}/bookings/?user_id={user_id}&resource_id={item_id}&start_time={start}&end_time={end}"
-            response = requests.post(url, headers=HEADERS, timeout=5)
+            url = f"{API_URL}/bookings/"
+            payload = {
+                "user_id": int(user_id),
+                "resource_id": int(item_id),
+                "start_time": start,
+                "end_time": end
+            }
+            response = requests.post(url, headers=HEADERS, json=payload, timeout=5)
 
             if response.status_code == 200:
                 bot.edit_message_text("✅ **Booking Confirmed!**\nYour gear is reserved. See you at the hub!", call.message.chat.id, call.message.message_id, reply_markup=main_menu(), parse_mode='Markdown')

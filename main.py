@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security.api_key import API_KeyHeader
+from fastapi.security.api_key import APIKeyHeader
 import os
 from app.repositories.database import engine
 from app.repositories.models import user_orm
@@ -10,7 +10,7 @@ user_orm.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Nexus Resource Management")
 
 API_KEY_NAME = "X-API-KEY"
-api_key_header = API_KeyHeader(name=API_KEY_NAME, auto_error=False)
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 def get_api_key(header_key: str = Depends(api_key_header)):
     if header_key == os.getenv("ADMIN_API_KEY"):

@@ -35,4 +35,19 @@ def create_booking(booking: BookingCreate, db: Session = Depends(get_db)):
 
 @router.get("/")
 def list_bookings(db: Session = Depends(get_db)):
-    return db.query(user_orm.Booking).all()
+    # This query joins the Booking with the Resource table to get the name
+    results = db.query(user_orm.Booking, user_orm.Resource.name).join(
+        user_orm.Resource, user_orm.Booking.resource_id == user_orm.Resource.id
+    ).all()
+    
+    output = []
+    for booking, res_name in results:
+        output.append({
+            "id": booking.id,
+            "user_id": booking.user_id,
+            "resource_id": booking.resource_id,
+            "resource_name": res_name, 
+            "start_time": booking.start_time.isoformat(),
+            "end_time": booking.end_time.isoformat()
+        })
+    return output
