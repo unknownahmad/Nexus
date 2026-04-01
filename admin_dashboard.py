@@ -8,7 +8,7 @@ ctk.set_default_color_theme("blue")
 
 API_KEY = "NexusSuperSecret2026"
 HEADERS = {"X-API-KEY": API_KEY}
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "https://nexus-production-7bc0.up.railway.app"
 
 class NexusAdmin(ctk.CTk):
     def __init__(self):

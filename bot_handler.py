@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-API_URL = "http://127.0.0.1:8000"
+API_URL = "https://nexus-production-7bc0.up.railway.app"
 
 API_KEY = "NexusSuperSecret2026"
 HEADERS = {"X-API-KEY": API_KEY}
