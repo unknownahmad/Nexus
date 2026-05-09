@@ -1,4 +1,4 @@
-.env
+.venv_stable/
 __pycache__/
-*.pyc
-.venv/
+bot_sessions.json
+.env
